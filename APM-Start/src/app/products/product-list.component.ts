@@ -1,42 +1,62 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { BehaviorSubject, catchError, combineLatest, EMPTY, filter, map, Observable, startWith, Subject } from 'rxjs';
 
-import { Subscription } from 'rxjs';
 import { ProductCategory } from '../product-categories/product-category';
+import { ProductCategoryService } from '../product-categories/product-category.service';
 
 import { Product } from './product';
 import { ProductService } from './product.service';
 
 @Component({
   templateUrl: './product-list.component.html',
-  styleUrls: ['./product-list.component.css']
+  styleUrls: ['./product-list.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ProductListComponent implements OnInit, OnDestroy {
+export class ProductListComponent {
   pageTitle = 'Product List';
   errorMessage = '';
-  categories: ProductCategory[] = [];
+  // categories: ProductCategory[] = [];
+  // selectedCategoryId = 1;
 
-  products: Product[] = [];
-  sub!: Subscription;
+  // private categorySelectedSubject = new Subject<number>();
+  private categorySelectedSubject = new BehaviorSubject<number>(0);
+  categorySelectedAction$ = this.categorySelectedSubject.asObservable();
 
-  constructor(private productService: ProductService) { }
+  products$ = combineLatest([
+    this.productService.productsWithAdd$,
+    this.categorySelectedAction$
+    // .pipe(
+    //   startWith(0)
+    // )
+  ])
+  .pipe(
+    map(([products, selectedCategoryId]) => 
+      products.filter(product => selectedCategoryId ? product.categoryId === selectedCategoryId : true)),
+    catchError(err => {
+      this.errorMessage = err;
+      return EMPTY;
+    })
+  );
 
-  ngOnInit(): void {
-    this.sub = this.productService.getProducts()
-      .subscribe({
-        next: products => this.products = products,
-        error: err => this.errorMessage = err
-      });
-  }
+  categories$ = this.productCategoryService.productCategories$.pipe(
+    catchError((err) => {
+      this.errorMessage = err;
+      return EMPTY;
+    })
+  );
 
-  ngOnDestroy(): void {
-    this.sub.unsubscribe();
-  }
+
+  constructor(
+    private productService: ProductService,
+    private productCategoryService: ProductCategoryService
+  ) {}
 
   onAdd(): void {
-    console.log('Not yet implemented');
+    this.productService.addProduct();
   }
 
   onSelected(categoryId: string): void {
-    console.log('Not yet implemented');
+    // this.selectedCategoryId = +categoryId;
+    this.categorySelectedSubject.next(+categoryId);
   }
 }
